@@ -5,8 +5,14 @@ $(document).ready(function () {
     openCategory(window.location.hash.substring(1));
   }
 
-  // Unveil images 50px before they appear
-  $('img').unveil(50);
+  // Unveil images when visible in jquery
+  $(function() { $('img').Lazy({visibleOnly: true}); });
+
+  // Show exception warnings upon hover
+  $('span.popup.exception').popup({
+    hoverable: true
+  });
+  $('a.popup.exception').popup();
 });
 
 /**
@@ -22,50 +28,66 @@ $(window).resize(function () {
   }, 500);
 });
 
-// Show exception warnings upon hover
-(function (root, $) {
-  $('span.popup.exception').popup({
-    hoverable: true
-  });
-  $('a.popup.exception').popup();
-}(window, jQuery));
-
 var isSearching = false;
 var jets = new Jets({
-  searchTag: '#jets-search',
+  callSearchManually: true,
   contentTag: '.jets-content',
   didSearch: function (searchPhrase) {
+    document.location.hash = '';
+    $('#no-results').css('display', 'none');
     $('.category h5 i').removeClass('active-icon');
-    var platform;
-    $(window).width() > 768 ? platform = 'desktop' : platform = 'mobile';
+    // Two separate table layouts are used for desktop/mobile
+    var platform = ($(window).width() > 768) ? 'desktop' : 'mobile';
     var content = $('.' + platform + '-table .jets-content');
     var table = $('.' + platform + '-table');
 
     // Non-strict comparison operator is used to allow for null
     if (searchPhrase == '') {
+      // Show all categories when no search term is entered
       $('.website-table').css('display', 'none');
       $('.website-table .label').css('display', 'none');
       $('.category').show();
       $('table').show();
       isSearching = false;
     } else {
+      // Hide irrelevant categories
       $('.website-table').css('display', 'none');
       $('.website-table .label').css('display', 'block');
       $('.category').hide();
       table.css('display', 'block');
       content.parent().show();
-      content.each(function () {
-        // Hide table when all rows are hidden by Jets
-        if ($(this).children(':hidden').length === $(this).children().length) {
-          if (platform == 'mobile') $(this).parent().hide();
-          else $(this).parent().parent().hide();
+      for(var i = 0; i < content.length; i++) {
+			  var section = $(content[i]);
+        // Hide table when all rows within are hidden by Jets
+        if (section.children(':hidden').length === section.children().length) {
+          if (platform == 'mobile') section.parent().hide();
+          else section.parent().parent().hide();
         }
-      });
+      }
+
+      if (table.children().length == table.children(':hidden').length) {
+          $('#no-results').css('display', 'block');
+      }
+
+      // Display images that came into view by searching
+      $('img').Lazy({visibleOnly: true});
+
       isSearching = true;
     }
   },
-  columns: [0] // Search by first column only
+  // Process searchable elements manually
+  manualContentHandling: function(tag) {
+    return $(tag).find('.keywords').text();
+  }
 });
+
+// Wrap the jets.search function with a debounced function
+var debouncedSearch = debounce(function(e) {
+  jets.search(e.target.value);
+}, 350);
+
+// Attach a keyup event listener to the input
+$('#jets-search').keyup(debouncedSearch);
 
 /**
  * Ensure searching is conducted with regard to the user's viewport
@@ -101,6 +123,9 @@ function openCategory(category) {
   $('.category h5 i').removeClass('active-icon');
   $('.website-table').css('display', 'none');
 
+  // Place the category being viewed in the URL bar
+  window.location.hash = category;
+
   var icon = $('#' + category + ' h5 i');
   icon.addClass('active-icon');
   if ($(window).width() > 768) {
@@ -123,4 +148,29 @@ function openCategory(category) {
 function closeCategory(category) {
   $('#' + category + ' h5 i').removeClass('active-icon');
   $('.' + category + '-table').css('display', 'none');
+  document.location.hash = '';
 }
+
+/**
+ * Returns a function, that, as long as it continues to be invoked, will not
+ * be triggered. The function will be called after it stops being called for
+ * N milliseconds.
+ * 
+ * @param func The function to be debounced
+ * @param wait The time in ms to debounce 
+ */
+function debounce(func, wait) {
+  var timeout;
+  
+	return function() {
+		var context = this, args = arguments;
+		var later = function() {
+			timeout = null;
+			func.apply(context, args);
+    };
+    
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+		if (!timeout) func.apply(context, args);
+	};
+};
